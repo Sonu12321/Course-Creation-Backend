@@ -21,7 +21,7 @@ const CreateCourse = async(req, res) => {
             category, 
             price, 
             duration,
-            videos 
+            status
         } = req.body;
 
         // Validate required fields
@@ -62,17 +62,22 @@ const CreateCourse = async(req, res) => {
             });
         }
 
-        // Inside CreateCourse function, replace the course creation part:
-        // Process course videos
+        // Process course videos with custom titles and descriptions from frontend
         const uploadedVideos = [];
-        for (const video of videoFiles) {
+        for (let i = 0; i < videoFiles.length; i++) {
+            const video = videoFiles[i];
             const videoUpload = await videoUploader(video.path);
+            
             if (videoUpload) {
+                // Check if custom title/description were provided
+                const videoTitle = req.body[`videoTitle_${i}`] || video.originalname;
+                const videoDescription = req.body[`videoDescription_${i}`] || `Video: ${video.originalname}`;
+                
                 uploadedVideos.push({
-                    title: video.originalname,
+                    title: videoTitle,
                     url: videoUpload.url,
                     duration: videoUpload.duration,
-                    description: `Video: ${video.originalname}`
+                    description: videoDescription
                 });
             }
         }
@@ -85,10 +90,10 @@ const CreateCourse = async(req, res) => {
             category,
             thumbnail: thumbnailUpload.url,
             previewVideo: previewVideoUpload.url,
-            videos: uploadedVideos, // Changed from videos || [] to uploadedVideos
+            videos: uploadedVideos,
             duration,
             price,
-            status: 'draft'
+            status: status || 'draft'
         });
 
         // Populate instructor details
