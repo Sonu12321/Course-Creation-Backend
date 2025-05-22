@@ -209,9 +209,27 @@ export const ShowStudentProfile = async (req, res) => {
 // Update Student Profile
 export const updateStudentProfile = async (req, res) => {
     try {
-        const { firstname, lastname } = req.body;
-        const updateData = { firstname, lastname };
+        const { firstName, lastname, firstname, lastName, email } = req.body;
 
+        // Build update data only if values are provided
+        const updateData = {};
+        if (firstname || firstName) updateData.firstname = (firstname || firstName).trim();
+        if (lastname || lastName) updateData.lastname = (lastname || lastName).trim();
+        if (email) updateData.email = email.trim().toLowerCase();
+
+
+        // Check for duplicate email if it's being updated
+        if (updateData.email) {
+            const emailExists = await UserSchema.findOne({ email: updateData.email });
+            if (emailExists && emailExists._id.toString() !== req.user._id.toString()) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email is already in use by another user.",
+                });
+            }
+        }
+
+        // Handle profile image upload
         if (req.file) {
             const result = await fileuploader(req.file.path);
             if (result) {
@@ -219,31 +237,56 @@ export const updateStudentProfile = async (req, res) => {
             }
         }
 
-        const student = await UserSchema.findOneAndUpdate(
-            { _id: req.user._id, role: 'user' },
+        // Handle password update if provided
+        if (req.body.currentPassword && req.body.newPassword) {
+            const user = await UserSchema.findById(req.user._id).select('+password');
+
+            if (!user) {
+                return res.status(404).json({ success: false, message: "User not found" });
+            }
+
+            const isPasswordMatch = await user.comparePassword(req.body.currentPassword);
+            if (!isPasswordMatch) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Current password is incorrect",
+                });
+            }
+
+            user.password = req.body.newPassword;
+            await user.save();
+        }
+
+        console.log("Update data:", updateData);
+
+        // Update user profile
+        const updatedUser = await UserSchema.findByIdAndUpdate(
+            req.user._id,
             updateData,
             { new: true, runValidators: true }
         );
 
-        if (!student) {
-            return res.status(404).json({
-                success: false,
-                message: "Student not found"
-            });
+        if (!updatedUser) {
+            return res.status(404).json({ success: false, message: "User not found" });
         }
+
+        console.log("Updated user:", updatedUser);
 
         res.status(200).json({
             success: true,
-            student
+            message: "Profile updated successfully",
+            user: updatedUser,
         });
 
     } catch (error) {
+        console.error("Profile update error:", error);
         res.status(500).json({
             success: false,
-            message: error.message
+            message: error.message || "An error occurred while updating profile",
         });
     }
 };
+
 
 // Delete Student Profile
 export const deleteStudentProfile = async (req, res) => {
