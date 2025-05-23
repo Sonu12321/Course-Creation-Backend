@@ -1,5 +1,5 @@
 import express from "express";
-import { deleteProfile, deleteUserByAdmin, forgotPassword, GetallUser, getCourseCompletionStats, getProfessorProfile, getUserCourseCompletionStatus, LoginUser, ProfessorProfile, resetPassword, ShowUserProfile, toggleUserRole, updateProfessorProfile, updateProfile, userRegister, verifyEmail,  } from "../controller/userController.js";
+import { deleteProfile, deleteUserByAdmin,  GetallUser, getCourseCompletionStats, getProfessorProfile, getUserCourseCompletionStatus, LoginUser, ProfessorProfile, resetPassword, ShowUserProfile, ThisIsTO, toggleUserRole, updateProfessorProfile, updateProfile, userRegister, verifyEmail,  } from "../controller/userController.js";
 import authUser from "../middlewares/authMiddlewares.js";
 import { upload } from '../middlewares/multerMiddleware.js'
 
@@ -8,8 +8,8 @@ const router = express.Router()
 router.post('/register', upload.single('profileImage'), userRegister);
 router.post('/verify-email', verifyEmail)
 router.post('/login', LoginUser)
-router.post('/forget-password', forgotPassword)
-router.post('/reset-password', authUser, resetPassword)
+router.post('/forgetPass', ThisIsTO)
+router.post('/reset-password', resetPassword) // Removed authUser middleware
 router.get('/profile', authUser, ShowUserProfile)
 router.put('/update', authUser, upload.single('profileImage'), updateProfile)
 router.delete('/delete', authUser, deleteProfile)

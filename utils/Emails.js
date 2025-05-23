@@ -57,8 +57,8 @@ export const sendWelcomeEmail = async(email, firstname) => {
         return null;
     }
 };
-
-export const sendPasswordResetEmail = async(email, resetURL) => {
+// SentResetP
+export const SentResetP = async(email, resetToken) => {
     try {
         const mailOptions = {
             from: process.env.EMAIL_FROM || 'Coursecreation <noreply@coursecreation.com>',
@@ -66,9 +66,9 @@ export const sendPasswordResetEmail = async(email, resetURL) => {
             subject: "Reset Your Password",
             html: `
                 <h1>Password Reset Request</h1>
-                <p>Click the link below to reset your password:</p>
-                <a href="${resetURL}">Reset Password</a>
-                <p>This link will expire in 1 hour.</p>
+                <p>Your password reset token is: <strong>${resetToken}</strong></p>
+                <p>To reset your password, use this token along with your new password.</p>
+                <p>This token will expire in 30 minutes.</p>
                 <p>If you didn't request this, please ignore this email.</p>
             `
         };

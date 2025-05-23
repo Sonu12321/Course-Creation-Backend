@@ -1,6 +1,6 @@
 import UserSchema from "../models/userModel.js";
 import { v4 as uuidv4 } from 'uuid';
-import { sendverificationEmail, sendWelcomeEmail, sendPasswordResetEmail, sendResetSuccessEmail } from "../utils/Emails.js";
+import { sendverificationEmail, sendWelcomeEmail,  sendResetSuccessEmail } from "../utils/Emails.js";
 import crypto from 'crypto';
 import { fileuploader } from '../utils/cloudinary.js';
 import Purchase from "../models/PurchaseModel.js";
@@ -134,7 +134,7 @@ export const forgotPasswordStudent = async (req, res) => {
         await student.save();
 
         const resetUrl = `${req.protocol}://${req.get('host')}/student/reset-password/${resetToken}`;
-        await sendPasswordResetEmail(student.email, resetUrl);
+        // await sendPasswordResetEmail(student.email, resetUrl);
 
         res.status(200).json({
             success: true,

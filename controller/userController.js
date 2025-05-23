@@ -1,6 +1,6 @@
 import UserSchema from "../models/userModel.js";
 import { v4 as uuidv4 } from 'uuid';
-import { sendverificationEmail, sendWelcomeEmail, sendPasswordResetEmail, sendResetSuccessEmail } from "../utils/Emails.js";
+import { sendverificationEmail, sendWelcomeEmail,  sendResetSuccessEmail, SentResetP } from "../utils/Emails.js";
 import crypto from 'crypto';
 import { fileuploader } from '../utils/cloudinary.js';
 import Course from "../models/CourseModel.js";
@@ -149,7 +149,7 @@ export const LoginUser = async (req, res) => {
 };
 
 // Forgot password
-export const forgotPassword = async (req, res) => {
+export const ThisIsTO = async (req, res) => {
     try {
         const { email } = req.body;
 
@@ -167,8 +167,8 @@ export const forgotPassword = async (req, res) => {
 
         await user.save();
 
-        const resetUrl = `${req.protocol}://${req.get('host')}/reset-password/${resetToken}`;
-        await sendPasswordResetEmail(user.email, resetUrl);
+        // Send the actual token in the email instead of just a URL
+        await SentResetP(user.email, resetToken);
 
         res.status(200).json({
             success: true,
@@ -186,13 +186,30 @@ export const forgotPassword = async (req, res) => {
 // Reset password
 export const resetPassword = async (req, res) => {
     try {
-        const { password } = req.body;
-        const user = await UserSchema.findById(req.user._id).select('+password');
-
+        const { token, password } = req.body;
+        
+        // Find user with this reset token
+        const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+        const user = await UserSchema.findOne({
+            resetPasswordToken: hashedToken,
+            resetPasswordExpiresAt: { $gt: Date.now() }
+        }).select('+password');
+        
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or expired reset token"
+            });
+        }
+        
+        // Update password and clear reset token
         user.password = password;
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpiresAt = undefined;
         await user.save();
         
-       
+        // Send reset success email
+        await sendResetSuccessEmail(user.email);
 
         res.status(200).json({
             success: true,
