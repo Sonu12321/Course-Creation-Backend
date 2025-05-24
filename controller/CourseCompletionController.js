@@ -1,323 +1,342 @@
 import Course from "../models/CourseModel.js";
-import UserSchema from "../models/userModel.js";
 import Purchase from "../models/PurchaseModel.js";
-import Notification from "../models/NotificationModel.js";
-// import { sendCourseCompletionEmail } from "../utils/Emails.js"; // Add this import
 
-// Track video progress and check for course completion
+/**
+ * Track video progress for a student
+ * Marks a specific video as completed and updates overall course progress
+ */
 export const trackVideoProgress = async (req, res) => {
-    try {
-        const { courseId, videoId, progress, completed } = req.body;
-        const userId = req.user._id;
+  try {
+    const { courseId, videoId } = req.body;
+    const userId = req.user._id;
 
-        // Validate required fields
-        if (!courseId || !videoId) {
-            return res.status(400).json({
-                success: false,
-                message: "Course ID and Video ID are required"
-            });
-        }
+    // Verify the user has purchased this course
+    const purchase = await Purchase.findOne({
+      user: userId,
+      course: courseId,
+      status: { $in: ['active', 'completed'] }
+    });
 
-        // Find the course and purchase in parallel for better performance
-        const [course, purchase] = await Promise.all([
-            Course.findById(courseId),
-            Purchase.findOne({ user: userId, course: courseId }) // Fix field names to match your schema
-        ]);
-
-        if (!course) {
-            return res.status(404).json({
-                success: false,
-                message: "Course not found"
-            });
-        }
-
-        if (!purchase) {
-            return res.status(404).json({
-                success: false,
-                message: "You are not enrolled in this course"
-            });
-        }
-
-        // Initialize completedVideos array if it doesn't exist
-        if (!purchase.completedVideos) {
-            purchase.completedVideos = [];
-        }
-
-        // Update video progress
-        let videoAdded = false;
-        if (completed && !purchase.completedVideos.includes(videoId)) {
-            purchase.completedVideos.push(videoId);
-            videoAdded = true;
-        }
-
-        // Calculate overall progress percentage
-        const totalVideos = course.videos.length;
-        const completedCount = purchase.completedVideos.length;
-        const progressPercentage = Math.round((completedCount / totalVideos) * 100);
-        
-        purchase.progress = progressPercentage;
-
-        // Check if course was just completed
-        const wasAlreadyCompleted = purchase.completionStatus === 'completed';
-        const isNowCompleted = completedCount >= totalVideos;
-        
-        if (isNowCompleted && !wasAlreadyCompleted) {
-            purchase.completionStatus = 'completed';
-            purchase.completionDate = new Date();
-            
-            // Get user details
-            const user = await UserSchema.findById(userId);
-            
-            // Create notification for course completion
-            await Notification.create({
-                userId,
-                title: "Course Completed!",
-                message: `Congratulations! You have completed the course: ${course.title}`,
-                type: "course_completion",
-                read: false,
-                courseId
-            });
-            
-            // Send completion email
-            if (user && user.email) {
-                await sendCourseCompletionEmail(
-                    user.email,
-                    user.firstname,
-                    course.title
-                );
-            }
-        } else if (!isNowCompleted) {
-            purchase.completionStatus = 'in-progress';
-        }
-
-        // Save the updated purchase record
-        await purchase.save();
-
-        res.status(200).json({
-            success: true,
-            message: videoAdded ? "Video marked as completed" : "Progress updated",
-            progress: progressPercentage,
-            completionStatus: purchase.completionStatus,
-            isCompleted: purchase.completionStatus === 'completed'
-        });
-
-    } catch (error) {
-        console.error("Error tracking video progress:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error updating progress",
-            error: error.message
-        });
+    if (!purchase) {
+      return res.status(403).json({
+        success: false,
+        message: "You must purchase this course to track progress"
+      });
     }
+
+    // Get the course to calculate total videos
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    // Initialize completedVideos array if it doesn't exist
+    if (!purchase.completedVideos) {
+      purchase.completedVideos = [];
+    }
+
+    // Check if video is already marked as completed
+    if (!purchase.completedVideos.includes(videoId)) {
+      purchase.completedVideos.push(videoId);
+    }
+
+    // Calculate progress percentage
+    const totalVideos = course.videos.length;
+    const completedCount = purchase.completedVideos.length;
+    
+    // Calculate percentage (handle division by zero)
+    purchase.progress = totalVideos > 0 
+      ? Math.round((completedCount / totalVideos) * 100) 
+      : 0;
+
+    // Update completion status
+    if (purchase.progress === 0) {
+      purchase.completionStatus = 'not-started';
+    } else if (purchase.progress < 100) {
+      purchase.completionStatus = 'in-progress';
+    } else {
+      purchase.completionStatus = 'completed';
+    }
+
+    await purchase.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Progress updated successfully",
+      progress: purchase.progress,
+      completionStatus: purchase.completionStatus,
+      completedVideos: purchase.completedVideos
+    });
+
+  } catch (error) {
+    console.error("Error in trackVideoProgress:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error tracking video progress",
+      error: error.message
+    });
+  }
 };
 
-// Get user's notifications with pagination
-export const getUserNotifications = async (req, res) => {
-    try {
-        const userId = req.user._id;
-        const { page = 1, limit = 10 } = req.query;
-        const skip = (page - 1) * limit;
+/**
+ * Get course completion status for a student
+ */
+export const getCourseCompletionStatus = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user._id;
 
-        // Get notifications count
-        const totalCount = await Notification.countDocuments({ userId });
-        
-        // Get paginated notifications
-        const notifications = await Notification.find({ userId })
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(parseInt(limit));
+    // Verify the user has purchased this course
+    const purchase = await Purchase.findOne({
+      user: userId,
+      course: courseId,
+      status: { $in: ['active', 'completed'] }
+    });
 
-        res.status(200).json({
-            success: true,
-            count: notifications.length,
-            totalCount,
-            totalPages: Math.ceil(totalCount / limit),
-            currentPage: parseInt(page),
-            notifications
-        });
-
-    } catch (error) {
-        console.error("Error fetching notifications:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error fetching notifications",
-            error: error.message
-        });
+    if (!purchase) {
+      return res.status(403).json({
+        success: false,
+        message: "You must purchase this course to view progress"
+      });
     }
+
+    // Get the course to include video details
+    const course = await Course.findById(courseId)
+      .select('title videos duration');
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    // Create a detailed progress report
+    const completedVideos = purchase.completedVideos || [];
+    const videoProgress = course.videos.map(video => ({
+      videoId: video._id.toString(),
+      title: video.title,
+      duration: video.duration,
+      completed: completedVideos.includes(video._id.toString())
+    }));
+
+    res.status(200).json({
+      success: true,
+      courseTitle: course.title,
+      progress: purchase.progress || 0,
+      completionStatus: purchase.completionStatus || 'not-started',
+      completedCount: completedVideos.length,
+      totalVideos: course.videos.length,
+      videoProgress
+    });
+
+  } catch (error) {
+    console.error("Error in getCourseCompletionStatus:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error getting course completion status",
+      error: error.message
+    });
+  }
 };
 
-// Mark notification as read
-// export const markNotificationAsRead = async (req, res) => {
-//     try {
-//         const { notificationId } = req.params;
-//         const userId = req.user._id;
+/**
+ * Mark multiple videos as completed at once
+ */
+export const markVideosAsCompleted = async (req, res) => {
+  try {
+    const { courseId, videoIds } = req.body;
+    const userId = req.user._id;
 
-//         // Find and update the notification
-//         const notification = await Notification.findOneAndUpdate(
-//             { _id: notificationId, userId },
-//             { read: true },
-//             { new: true }
-//         );
+    if (!videoIds || !Array.isArray(videoIds)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide an array of video IDs"
+      });
+    }
 
-//         if (!notification) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: "Notification not found"
-//             });
-//         }
+    // Verify the user has purchased this course
+    const purchase = await Purchase.findOne({
+      user: userId,
+      course: courseId,
+      status: { $in: ['active', 'completed'] }
+    });
 
-//         res.status(200).json({
-//             success: true,
-//             message: "Notification marked as read",
-//             notification
-//         });
+    if (!purchase) {
+      return res.status(403).json({
+        success: false,
+        message: "You must purchase this course to track progress"
+      });
+    }
 
-//     } catch (error) {
-//         console.error("Error marking notification as read:", error);
-//         res.status(500).json({
-//             success: false,
-//             message: "Error updating notification",
-//             error: error.message
-//         });
-//     }
-// };
+    // Get the course to calculate total videos
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
 
-// // Mark all notifications as read
-// export const markAllNotificationsAsRead = async (req, res) => {
-//     try {
-//         const userId = req.user._id;
+    // Initialize completedVideos array if it doesn't exist
+    if (!purchase.completedVideos) {
+      purchase.completedVideos = [];
+    }
 
-//         // Update all unread notifications
-//         const result = await Notification.updateMany(
-//             { userId, read: false },
-//             { read: true }
-//         );
+    // Add new video IDs to completed list (avoid duplicates)
+    videoIds.forEach(videoId => {
+      if (!purchase.completedVideos.includes(videoId)) {
+        purchase.completedVideos.push(videoId);
+      }
+    });
 
-//         res.status(200).json({
-//             success: true,
-//             message: "All notifications marked as read",
-//             count: result.modifiedCount
-//         });
+    // Calculate progress percentage
+    const totalVideos = course.videos.length;
+    const completedCount = purchase.completedVideos.length;
+    
+    purchase.progress = totalVideos > 0 
+      ? Math.round((completedCount / totalVideos) * 100) 
+      : 0;
 
-//     } catch (error) {
-//         console.error("Error marking all notifications as read:", error);
-//         res.status(500).json({
-//             success: false,
-//             message: "Error updating notifications",
-//             error: error.message
-//         });
-//     }
-// };
+    // Update completion status
+    if (purchase.progress === 0) {
+      purchase.completionStatus = 'not-started';
+    } else if (purchase.progress < 100) {
+      purchase.completionStatus = 'in-progress';
+    } else {
+      purchase.completionStatus = 'completed';
+    }
 
-// // Get course completion certificate
-// export const getCourseCompletionCertificate = async (req, res) => {
-//     try {
-//         const { courseId } = req.params;
-//         const userId = req.user._id;
+    await purchase.save();
 
-//         // Find the purchase record and course in parallel
-//         const [purchase, course, user] = await Promise.all([
-//             Purchase.findOne({ 
-//                 user: userId, 
-//                 course: courseId,
-//                 completionStatus: 'completed' 
-//             }),
-//             Course.findById(courseId).populate('instructor', 'firstname lastname'),
-//             UserSchema.findById(userId)
-//         ]);
+    res.status(200).json({
+      success: true,
+      message: "Videos marked as completed successfully",
+      progress: purchase.progress,
+      completionStatus: purchase.completionStatus,
+      completedVideos: purchase.completedVideos
+    });
 
-//         if (!purchase) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: "You have not completed this course yet"
-//             });
-//         }
+  } catch (error) {
+    console.error("Error in markVideosAsCompleted:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error marking videos as completed",
+      error: error.message
+    });
+  }
+};
 
-//         if (!course || !user) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: "Course or user information not found"
-//             });
-//         }
+/**
+ * Reset progress for a course (mark all videos as not completed)
+ */
+export const resetCourseProgress = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user._id;
 
-//         // Generate certificate data
-//         const certificateData = {
-//             courseTitle: course.title,
-//             studentName: `${user.firstname} ${user.lastname}`,
-//             instructorName: `${course.instructor.firstname} ${course.instructor.lastname}`,
-//             completionDate: purchase.completionDate || purchase.updatedAt,
-//             certificateId: `CERT-${courseId.substring(0, 5)}-${userId.substring(0, 5)}-${Date.now().toString().substring(7)}`
-//         };
+    // Verify the user has purchased this course
+    const purchase = await Purchase.findOne({
+      user: userId,
+      course: courseId,
+      status: { $in: ['active', 'completed'] }
+    });
 
-//         res.status(200).json({
-//             success: true,
-//             message: "Certificate generated successfully",
-//             certificate: certificateData
-//         });
+    if (!purchase) {
+      return res.status(403).json({
+        success: false,
+        message: "You must purchase this course to reset progress"
+      });
+    }
 
-//     } catch (error) {
-//         console.error("Error generating certificate:", error);
-//         res.status(500).json({
-//             success: false,
-//             message: "Error generating certificate",
-//             error: error.message
-//         });
-//     }
-// };
+    // Reset progress
+    purchase.completedVideos = [];
+    purchase.progress = 0;
+    purchase.completionStatus = 'not-started';
 
-// // Get course completion status
-// export const getCourseCompletionStatus = async (req, res) => {
-//     try {
-//         const { courseId } = req.params;
-//         const userId = req.user._id;
+    await purchase.save();
 
-//         // Find purchase and course in parallel
-//         const [purchase, course] = await Promise.all([
-//             Purchase.findOne({ user: userId, course: courseId }),
-//             Course.findById(courseId)
-//         ]);
+    res.status(200).json({
+      success: true,
+      message: "Course progress has been reset",
+      progress: 0,
+      completionStatus: 'not-started',
+      completedVideos: []
+    });
 
-//         if (!purchase) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: "You are not enrolled in this course"
-//             });
-//         }
+  } catch (error) {
+    console.error("Error in resetCourseProgress:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error resetting course progress",
+      error: error.message
+    });
+  }
+};
 
-//         if (!course) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: "Course not found"
-//             });
-//         }
+/**
+ * Get all courses with progress for the current user
+ */
+export const getUserCoursesWithProgress = async (req, res) => {
+  try {
+    const userId = req.user._id;
 
-//         // Calculate progress if not already set
-//         let progress = purchase.progress || 0;
-//         if (purchase.completedVideos && !purchase.progress) {
-//             const totalVideos = course.videos.length;
-//             const completedCount = purchase.completedVideos.length;
-//             progress = Math.round((completedCount / totalVideos) * 100);
-            
-//             // Update the purchase record with calculated progress
-//             purchase.progress = progress;
-//             await purchase.save();
-//         }
+    // Find all purchases for this user
+    const purchases = await Purchase.find({
+      user: userId,
+      status: { $in: ['active', 'completed'] }
+    }).populate({
+      path: 'course',
+      select: 'title description thumbnail duration videos instructor category',
+      populate: {
+        path: 'instructor',
+        select: 'firstname lastname'
+      }
+    });
 
-//         res.status(200).json({
-//             success: true,
-//             courseId,
-//             progress,
-//             completedVideos: purchase.completedVideos || [],
-//             completionStatus: purchase.completionStatus || 'not-started',
-//             completionDate: purchase.completionDate
-//         });
+    if (!purchases || purchases.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No purchased courses found"
+      });
+    }
 
-//     } catch (error) {
-//         console.error("Error getting completion status:", error);
-//         res.status(500).json({
-//             success: false,
-//             message: "Error fetching completion status",
-//             error: error.message
-//         });
-//     }
-// };
+    // Format the response
+    const coursesWithProgress = purchases.map(purchase => {
+      const course = purchase.course;
+      
+      return {
+        courseId: course._id,
+        title: course.title,
+        description: course.description,
+        thumbnail: course.thumbnail,
+        duration: course.duration,
+        category: course.category,
+        instructor: course.instructor ? 
+          `${course.instructor.firstname} ${course.instructor.lastname}` : 
+          'Unknown Instructor',
+        progress: purchase.progress || 0,
+        completionStatus: purchase.completionStatus || 'not-started',
+        completedVideos: purchase.completedVideos || [],
+        totalVideos: course.videos ? course.videos.length : 0
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      count: coursesWithProgress.length,
+      courses: coursesWithProgress
+    });
+
+  } catch (error) {
+    console.error("Error in getUserCoursesWithProgress:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching user courses with progress",
+      error: error.message
+    });
+  }
+};

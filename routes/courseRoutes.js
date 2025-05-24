@@ -4,8 +4,10 @@ import authUser from '../middlewares/authMiddlewares.js';
 import { upload } from '../middlewares/multerMiddleware.js';
 import { 
   trackVideoProgress, 
-//   getCourseCompletionStatus, 
-//   getCourseCompletionCertificate 
+  getCourseCompletionStatus,
+  markVideosAsCompleted,
+  resetCourseProgress,
+  getUserCoursesWithProgress
 } from '../controller/CourseCompletionController.js';
 
 const router = express.Router();
@@ -45,16 +47,16 @@ router.put('/:courseId',
 router.delete('/courses/:courseId', authUser, deleteCourse);    
 router.get('/courses/:courseId', authUser, getCourseById);
 
-
-
 // Admin routes
 router.get('/admin/courses', authUser, adminGetAllCourses);
 router.put('/admin/course/:courseId', authUser, adminUpdateCourse);
 router.delete('/admin/course/:courseId', authUser, adminDeleteCourse);
 
 // Course completion routes
-router.post('/course-completion/track', authUser, trackVideoProgress);
-// router.get('/course-completion/status/:courseId', authUser, getCourseCompletionStatus);
-// router.get('/course-completion/certificate/:courseId', authUser, getCourseCompletionCertificate);
+router.post('/progress/track-video', authUser, trackVideoProgress);
+router.get('/progress/status/:courseId', authUser, getCourseCompletionStatus);
+router.post('/progress/mark-completed', authUser, markVideosAsCompleted);
+router.post('/progress/reset/:courseId', authUser, resetCourseProgress);
+router.get('/progress/my-courses', authUser, getUserCoursesWithProgress);
 
 export default router;
