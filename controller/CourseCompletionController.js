@@ -68,7 +68,9 @@ export const trackVideoProgress = async (req, res) => {
       message: "Progress updated successfully",
       progress: purchase.progress,
       completionStatus: purchase.completionStatus,
-      completedVideos: purchase.completedVideos
+      completedVideos: purchase.completedVideos,
+      completedCount: completedCount,
+      totalVideos: totalVideos
     });
 
   } catch (error) {
@@ -217,7 +219,9 @@ export const markVideosAsCompleted = async (req, res) => {
       message: "Videos marked as completed successfully",
       progress: purchase.progress,
       completionStatus: purchase.completionStatus,
-      completedVideos: purchase.completedVideos
+      completedVideos: purchase.completedVideos,
+      completedCount: completedCount,
+      totalVideos: totalVideos
     });
 
   } catch (error) {
@@ -259,12 +263,18 @@ export const resetCourseProgress = async (req, res) => {
 
     await purchase.save();
 
+    // Get the course to include total videos in response
+    const course = await Course.findById(courseId);
+    const totalVideos = course ? course.videos.length : 0;
+
     res.status(200).json({
       success: true,
       message: "Course progress has been reset",
       progress: 0,
       completionStatus: 'not-started',
-      completedVideos: []
+      completedVideos: [],
+      completedCount: 0,
+      totalVideos: totalVideos
     });
 
   } catch (error) {
