@@ -340,3 +340,39 @@ export const getUserCoursesWithProgress = async (req, res) => {
     });
   }
 };
+
+/**
+ * Get the total number of videos in a course
+ */
+export const getVideoCount = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    
+    // Get the course to count videos
+    const course = await Course.findById(courseId)
+      .select('title videos');
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    const totalVideos = course.videos.length;
+
+    res.status(200).json({
+      success: true,
+      courseTitle: course.title,
+      totalVideos: totalVideos
+    });
+
+  } catch (error) {
+    console.error("Error in getVideoCount:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error getting video count",
+      error: error.message
+    });
+  }
+};

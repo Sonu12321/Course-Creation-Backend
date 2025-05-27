@@ -7,7 +7,8 @@ import {
   getCourseCompletionStatus,
   markVideosAsCompleted,
   resetCourseProgress,
-  getUserCoursesWithProgress
+  getUserCoursesWithProgress,
+  getVideoCount
 } from '../controller/CourseCompletionController.js';
 
 const router = express.Router();
@@ -58,5 +59,6 @@ router.get('/progress/status/:courseId', authUser, getCourseCompletionStatus);
 router.post('/progress/mark-completed', authUser, markVideosAsCompleted);
 router.post('/progress/reset/:courseId', authUser, resetCourseProgress);
 router.get('/progress/my-courses', authUser, getUserCoursesWithProgress);
+router.get('/course/:courseId/video-count', authUser, getVideoCount);
 
 export default router;
