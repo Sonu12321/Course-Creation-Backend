@@ -6,6 +6,7 @@ import StudentRouter from './routes/StudentsRoutes.js'
 import CourseRouter from './routes/courseRoutes.js'
 import PurchaseRouter from './routes/purchaseRoutes.js'
 import CourseGetRouter from './routes/CourseRouterToGet.js'
+import courseProgressRoutes from './routes/CourseProgressRoutes.js';
 
 import cookieParser from "cookie-parser";
 import path from 'path';
@@ -60,6 +61,7 @@ app.use('/api/students', StudentRouter);
 app.use('/api/courses', CourseRouter);
 app.use('/api/purchase', PurchaseRouter);
 app.use('/api/Courseget', CourseGetRouter);
+app.use('/api/progress', courseProgressRoutes);
 
 
 // Database connection and server start

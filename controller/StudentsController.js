@@ -628,3 +628,84 @@ export const deleteReview = async (req, res) => {
         });
     }
 };
+
+// Get all reviews for courses created by a professor
+export const getProfessorCourseReviews = async (req, res) => {
+    try {
+        const professorId = req.user._id;
+        
+        // Verify the user is a professor
+        if (req.user.role !== 'professor') {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. Only professors can access this resource."
+            });
+        }
+        
+        // Find all courses by this professor
+        const professorCourses = await Course.find({ instructor: professorId })
+            .select('_id title thumbnail rating reviews')
+            .populate({
+                path: 'reviews.user',
+                select: 'firstname lastname profileImage'
+            });
+        
+        if (!professorCourses || professorCourses.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No courses found for this professor"
+            });
+        }
+        
+        // Format the response with organized reviews by course
+        const coursesWithReviews = professorCourses.map(course => {
+            // Format the reviews for each course
+            const formattedReviews = course.reviews.map(review => {
+                return {
+                    reviewId: review._id,
+                    rating: review.rating,
+                    comment: review.comment,
+                    createdAt: review.createdAt,
+                    user: review.user ? {
+                        userId: review.user._id,
+                        name: `${review.user.firstname} ${review.user.lastname}`,
+                        profileImage: review.user.profileImage
+                    } : { userId: 'deleted', name: 'Deleted User', profileImage: '' }
+                };
+            });
+            
+            // Sort reviews by date (newest first)
+            formattedReviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            
+            return {
+                courseId: course._id,
+                title: course.title,
+                thumbnail: course.thumbnail,
+                averageRating: course.rating,
+                reviewCount: course.reviews.length,
+                reviews: formattedReviews
+            };
+        });
+        
+        // Calculate overall statistics
+        const totalReviews = coursesWithReviews.reduce((sum, course) => sum + course.reviewCount, 0);
+        const overallAverageRating = coursesWithReviews.length > 0 ?
+            coursesWithReviews.reduce((sum, course) => sum + (course.averageRating * course.reviewCount), 0) / totalReviews :
+            0;
+        
+        res.status(200).json({
+            success: true,
+            courseCount: coursesWithReviews.length,
+            totalReviews: totalReviews,
+            overallAverageRating: parseFloat(overallAverageRating.toFixed(2)),
+            courses: coursesWithReviews
+        });
+        
+    } catch (error) {
+        console.error("Error fetching professor course reviews:", error);
+        res.status(500).json({
+            success: false,
+            message: error.message || "Error fetching professor course reviews"
+        });
+    }
+};
