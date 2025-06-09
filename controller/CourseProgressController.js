@@ -1,5 +1,6 @@
 import UserProgress from "../models/UserProgressModel.js";
 import Course from "../models/CourseModel.js";
+import { checkAndGenerateCertificate } from "./CertificateController.js";
 
 // Mark a video as watched
 const markVideoWatched = async (req, res) => {
@@ -54,6 +55,12 @@ const markVideoWatched = async (req, res) => {
       select: 'title videos',
     });
 
+    // Check if course is completed and generate certificate if needed
+    let certificate = null;
+    if (userProgress.completionPercentage === 100) {
+      certificate = await checkAndGenerateCertificate(userId, courseId);
+    }
+
     res.status(200).json({
       success: true,
       message: "Video marked as watched",
@@ -64,6 +71,8 @@ const markVideoWatched = async (req, res) => {
         watchedVideos: userProgress.watchedVideos,
         totalVideos: userProgress.course.videos.length,
       },
+      certificateGenerated: certificate ? true : false,
+      certificate: certificate,
     });
   } catch (error) {
     console.error("Error in markVideoWatched:", error);

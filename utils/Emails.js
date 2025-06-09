@@ -103,3 +103,29 @@ export const sendResetSuccessEmail = async(email) => {
         return null;
     }
 };
+
+export const sendCertificateEmail = async(email, firstname, courseName, certificateUrl, verificationUrl) => {
+    try {
+        const mailOptions = {
+            from: process.env.EMAIL_FROM || 'Coursecreation <noreply@coursecreation.com>',
+            to: email,
+            subject: `Congratulations! You've completed ${courseName}`,
+            html: `
+                <h1>Course Completion Certificate</h1>
+                <p>Congratulations ${firstname}!</p>
+                <p>You have successfully completed the course: <strong>${courseName}</strong>.</p>
+                <p>Your certificate of completion is ready. You can view and download it using the link below:</p>
+                <p><a href="${certificateUrl}" style="padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px;">View Certificate</a></p>
+                <p>You can verify the authenticity of your certificate using this link: <a href="${verificationUrl}">Verify Certificate</a></p>
+                <p>Thank you for your dedication to learning with us!</p>
+            `
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Certificate email sent successfully:', info);
+        return info;
+    } catch (error) {
+        console.error('Error sending certificate email:', error);
+        return null;
+    }
+};

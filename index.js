@@ -7,7 +7,12 @@ import CourseRouter from './routes/courseRoutes.js'
 import PurchaseRouter from './routes/purchaseRoutes.js'
 import CourseGetRouter from './routes/CourseRouterToGet.js'
 import courseProgressRoutes from './routes/CourseProgressRoutes.js';
+import adminProgressRoutes from './routes/adminRoutes.js'
+// Add this line with your other route imports
+import certificateRoutes from './routes/certificateRoutes.js';
 
+
+// Add this line with your other app.use statements
 import cookieParser from "cookie-parser";
 import path from 'path';
 import cors from 'cors'
@@ -62,6 +67,8 @@ app.use('/api/courses', CourseRouter);
 app.use('/api/purchase', PurchaseRouter);
 app.use('/api/Courseget', CourseGetRouter);
 app.use('/api/progress', courseProgressRoutes);
+app.use('/api/certificates', certificateRoutes);
+app.use('/api/admin', adminProgressRoutes);
 
 
 // Database connection and server start
